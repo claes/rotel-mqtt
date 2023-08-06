@@ -1,17 +1,20 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 )
 
+// Rotel data parser
+
 type RotelDataParser struct {
-	RotelDataQueue    [][]string
+	RotelDataQueue   [][]string
 	NextKeyValuePair string
 }
 
 func NewRotelDataParser() *RotelDataParser {
 	return &RotelDataParser{
-		RotelDataQueue:    [][]string{},
+		RotelDataQueue:   [][]string{},
 		NextKeyValuePair: "",
 	}
 }
@@ -37,7 +40,8 @@ func (rdp *RotelDataParser) PushRotelData(rotelData []string) {
 
 func (rdp *RotelDataParser) ComputeFixedLengthDataToRead(data string) int {
 	if strings.HasPrefix(data, "display=") && len(data) >= len("display=XXX") {
-		nextReadCount := int(data[len("display=") : len("display=XXX")][0])
+		// nextReadCount := int(data[len("display="):len("display=XXX")][0])
+		nextReadCount, _ := strconv.Atoi(data[len("display="):len("display=XXX")])
 		return nextReadCount
 	}
 	return 0
@@ -64,4 +68,3 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 		}
 	}
 }
-
