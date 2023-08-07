@@ -6,34 +6,38 @@ import (
 	"strconv"
 	"strings"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
 )
 
-// // MQTT bridge
+// MQTT bridge
 
-// type MQTTBridge struct {
-// 	MQTTClient mqtt.Client
-// }
+type MQTTBridge struct {
+	MQTTClient mqtt.Client
+}
 
-// func NewMQTTBridge() *MQTTBridge {
-// 	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
-// 	client := mqtt.NewClient(opts)
-// 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-// 		panic(token.Error())
-// 	}
+func NewMQTTBridge() *MQTTBridge {
+	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		panic(token.Error())
+	}
 
-// 	return &MQTTBridge{
-// 		MQTTClient : client,
-// 	}
-// }
+	return &MQTTBridge{
+		MQTTClient: client,
+	}
+}
 
-// func (mb *MQTTBridge) Publish(message string) {
+func (mb *MQTTBridge) Publish(topic string, message string) {
+	token := mb.MQTTClient.Publish(topic, 0, false, message)
+	token.Wait()
+}
 
+// func (mb *MQTTBridge) PublishOld(message string) {
 // 	for {
-// 		//currentTime := time.Now().Format(time.RFC3339)
-// 		token := client.Publish("time/topic", 0, false, message)
+// 		token := mb.MQTTClient.Publish("time/topic", 0, false, message)
 // 		token.Wait()
-// 		fmt.Println("Published:", currentTime)
+// 		fmt.Println("Published:", message)
 // 		time.Sleep(1 * time.Second)
 // 	}
 // }
@@ -56,7 +60,7 @@ func NewRotelDevice() *RotelDevice {
 	}
 }
 
-func (rd *RotelDevice) SerialLoop() {
+func (rd *RotelDevice) SerialLoop(mqttBridge *MQTTBridge) {
 	c := &serial.Config{Name: "/dev/ttyUSB0", Baud: 115200}
 	s, err := serial.OpenPort(c)
 	if err != nil {
@@ -71,6 +75,8 @@ func (rd *RotelDevice) SerialLoop() {
 		}
 		//fmt.Print(string(buf[:n]))
 		rd.ProcessData(string(buf[:n]))
+
+		mqttBridge.Publish("rotel/volume", rd.Volume)
 		fmt.Printf("Volume: %s\n", rd.Volume)
 		fmt.Printf("Source: %s\n", rd.Source)
 		fmt.Printf("Freq: %s\n", rd.Freq)
@@ -118,7 +124,6 @@ func (rd *RotelDevice) ProcessData(data string) {
 			}
 		}
 	}
-
 }
 
 // Rotel data parser
@@ -187,21 +192,9 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 
 func main() {
 
+	mqttBridge := NewMQTTBridge()
+
 	rotelDevice := NewRotelDevice()
-	rotelDevice.SerialLoop()
+	rotelDevice.SerialLoop(mqttBridge)
 
-	// c := &serial.Config{Name: "/dev/ttyUSB0", Baud: 115200}
-	// s, err := serial.OpenPort(c)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// buf := make([]byte, 128)
-	// for {
-	// 	n, err := s.Read(buf)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// 	fmt.Print(string(buf[:n]))
-	// }
 }
