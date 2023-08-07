@@ -12,79 +12,105 @@ import (
 
 // MQTT bridge
 
-type MQTTBridge struct {
-	MQTTClient mqtt.Client
+// type MQTTBridge struct {
+// 	MQTTClient mqtt.Client
+// }
+
+// func NewMQTTBridge() *MQTTBridge {
+// 	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
+// 	client := mqtt.NewClient(opts)
+// 	if token := client.Connect(); token.Wait() && token.Error() != nil {
+// 		panic(token.Error())
+// 	}
+
+// 	token := client.Subscribe("rotel/volume", 0, onVolumeUpdate)
+// 	token.Wait()
+
+// 	return &MQTTBridge{
+// 		MQTTClient: client,
+// 	}
+// }
+
+// func (mb *MQTTBridge) Publish(topic string, message string) {
+// 	token := mb.MQTTClient.Publish(topic, 0, false, message)
+// 	token.Wait()
+// }
+
+// Rotel device
+
+type RotelDevice struct {
+	SerialPort      *serial.Port
+	MQTTClient      mqtt.Client
+	RotelDataParser RotelDataParser
+
+	Volume  string
+	Source  string
+	Freq    string
+	Mute    string
+	State   string
+	Display string
 }
 
-func NewMQTTBridge() *MQTTBridge {
+func (rd *RotelDevice) onVolumeUpdate(client mqtt.Client, message mqtt.Message) {
+	fmt.Printf("%s\t%s\n", message.Topic(), message.Payload())
+}
+
+func (rd *RotelDevice) onVolumeSet(client mqtt.Client, message mqtt.Message) {
+	rd.SendRequest("volume_up!")
+}
+
+func NewRotelDevice() *RotelDevice {
+
+	serialConfig := &serial.Config{Name: "/dev/ttyUSB0", Baud: 115200}
+	serialPort, err := serial.OpenPort(serialConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
 
-	return &MQTTBridge{
-		MQTTClient: client,
+	rotelDevice := &RotelDevice{
+		SerialPort:      serialPort,
+		MQTTClient:      client,
+		RotelDataParser: *NewRotelDataParser(),
 	}
+
+	token := client.Subscribe("rotel/volume", 0, rotelDevice.onVolumeUpdate)
+	token.Wait()
+
+	token = client.Subscribe("rotel/volume/set", 0, rotelDevice.onVolumeSet)
+	token.Wait()
+
+	return rotelDevice
 }
 
-func (mb *MQTTBridge) Publish(topic string, message string) {
-	token := mb.MQTTClient.Publish(topic, 0, false, message)
+func (rd *RotelDevice) Publish(topic string, message string) {
+	token := rd.MQTTClient.Publish(topic, 0, false, message)
 	token.Wait()
 }
 
-// func (mb *MQTTBridge) PublishOld(message string) {
-// 	for {
-// 		token := mb.MQTTClient.Publish("time/topic", 0, false, message)
-// 		token.Wait()
-// 		fmt.Println("Published:", message)
-// 		time.Sleep(1 * time.Second)
-// 	}
-// }
-
-// Rotel device
-
-type RotelDevice struct {
-	rotelDataParser RotelDataParser
-	Volume          string
-	Source          string
-	Freq            string
-	Mute            string
-	State           string
-	Display         string
-}
-
-func NewRotelDevice() *RotelDevice {
-	return &RotelDevice{
-		rotelDataParser: *NewRotelDataParser(),
-	}
-}
-
-func (rd *RotelDevice) SerialLoop(mqttBridge *MQTTBridge) {
-	c := &serial.Config{Name: "/dev/ttyUSB0", Baud: 115200}
-	s, err := serial.OpenPort(c)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func (rd *RotelDevice) SerialLoop() {
 	buf := make([]byte, 128)
 	for {
-		n, err := s.Read(buf)
+		n, err := rd.SerialPort.Read(buf)
 		if err != nil {
 			log.Fatal(err)
 		}
-		//fmt.Print(string(buf[:n]))
 		rd.ProcessData(string(buf[:n]))
 
-		mqttBridge.Publish("rotel/volume", rd.Volume)
-		fmt.Printf("Volume: %s\n", rd.Volume)
-		fmt.Printf("Source: %s\n", rd.Source)
-		fmt.Printf("Freq: %s\n", rd.Freq)
-		fmt.Printf("Display: %s\n", rd.Display)
-		fmt.Printf("Len Display: %d\n", len(rd.Display))
-		fmt.Printf("State: %s\n", rd.State)
-		fmt.Printf("Mute: %s\n", rd.Mute)
-		fmt.Printf("\n")
+		rd.Publish("rotel/volume", rd.Volume)
+		// fmt.Printf("Volume: %s\n", rd.Volume)
+		// fmt.Printf("Source: %s\n", rd.Source)
+		// fmt.Printf("Freq: %s\n", rd.Freq)
+		// fmt.Printf("Display: %s\n", rd.Display)
+		// fmt.Printf("Len Display: %d\n", len(rd.Display))
+		// fmt.Printf("State: %s\n", rd.State)
+		// fmt.Printf("Mute: %s\n", rd.Mute)
+		// fmt.Printf("\n")
 	}
 }
 
@@ -95,11 +121,15 @@ func (rd *RotelDevice) SendRequest(message string) {
 	// defer serialMutex.Unlock()
 
 	// send
+	_, err := rd.SerialPort.Write([]byte(message))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (rd *RotelDevice) ProcessData(data string) {
-	rd.rotelDataParser.HandleParsedData(data)
-	for cmd := rd.rotelDataParser.GetNextRotelData(); cmd != nil; cmd = rd.rotelDataParser.GetNextRotelData() {
+	rd.RotelDataParser.HandleParsedData(data)
+	for cmd := rd.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = rd.RotelDataParser.GetNextRotelData() {
 
 		switch action := cmd[0]; action {
 		case "volume":
@@ -191,10 +221,6 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 }
 
 func main() {
-
-	mqttBridge := NewMQTTBridge()
-
 	rotelDevice := NewRotelDevice()
-	rotelDevice.SerialLoop(mqttBridge)
-
+	rotelDevice.SerialLoop()
 }
