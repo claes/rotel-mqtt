@@ -30,6 +30,42 @@ type RotelDevice struct {
 	Volume  string
 }
 
+func NewRotelDevice(serialDevice string, mqttBroker string) *RotelDevice {
+
+	serialConfig := &serial.Config{Name: serialDevice, Baud: 115200}
+	serialPort, err := serial.OpenPort(serialConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		panic(token.Error())
+	}
+
+	rotelDevice := &RotelDevice{
+		SerialPort:      serialPort,
+		MQTTClient:      client,
+		RotelDataParser: *NewRotelDataParser(),
+	}
+
+	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
+		"rotel/volume/set": rotelDevice.onVolumeSet,
+		"rotel/power/set":  rotelDevice.onPowerSet,
+		"rotel/mute/set":   rotelDevice.onMuteSet,
+		"rotel/source/set": rotelDevice.onSourceSet,
+		"rotel/bass/set":   rotelDevice.onBassSet,
+		"rotel/treble/set": rotelDevice.onTrebleSet,
+	}
+	for key, function := range funcs {
+		token := client.Subscribe(key, 0, function)
+		token.Wait()
+	}
+	rotelDevice.initialize()
+	return rotelDevice
+}
+
 func (rd *RotelDevice) initialize() {
 	rd.SendRequest("display_update_auto!")
 	rd.SendRequest("get_current_power!")
@@ -77,44 +113,6 @@ func (rd *RotelDevice) onBalanceSet(client mqtt.Client, message mqtt.Message) {
 	rd.SendRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
 }
 
-func NewRotelDevice() *RotelDevice {
-
-	serialConfig := &serial.Config{Name: "/dev/ttyUSB0", Baud: 115200}
-	serialPort, err := serial.OpenPort(serialConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	opts := mqtt.NewClientOptions().AddBroker("tcp://localhost:1883")
-	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
-	}
-
-	rotelDevice := &RotelDevice{
-		SerialPort:      serialPort,
-		MQTTClient:      client,
-		RotelDataParser: *NewRotelDataParser(),
-	}
-
-	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
-		"rotel/volume/set": rotelDevice.onVolumeSet,
-		"rotel/power/set":  rotelDevice.onPowerSet,
-		"rotel/mute/set":   rotelDevice.onMuteSet,
-		"rotel/source/set": rotelDevice.onSourceSet,
-		"rotel/bass/set":   rotelDevice.onBassSet,
-		"rotel/treble/set": rotelDevice.onTrebleSet,
-	}
-
-	for key, function := range funcs {
-		token := client.Subscribe(key, 0, function)
-		token.Wait()
-	}
-
-	rotelDevice.initialize()
-	return rotelDevice
-}
-
 func (rd *RotelDevice) Publish(topic string, message string) {
 	token := rd.MQTTClient.Publish(topic, 0, false, message)
 	token.Wait()
@@ -141,25 +139,9 @@ func (rd *RotelDevice) SerialLoop() {
 			"rotel/treble":  rd.Treble,
 			"rotel/volume":  rd.Volume,
 		}
-
 		for key, value := range statemap {
 			rd.Publish(key, value)
 		}
-
-		// rd.Publish("rotel/volume", rd.Volume)
-		// rd.Publish("rotel/source", rd.Source)
-		// rd.Publish("rotel/freq", rd.Freq)
-		// rd.Publish("rotel/display", rd.Display)
-		// rd.Publish("rotel/mute", rd.Mute)
-		// rd.Publish("rotel/state", rd.State)
-		// fmt.Printf("Volume: %s\n", rd.Volume)
-		// fmt.Printf("Source: %s\n", rd.Source)
-		// fmt.Printf("Freq: %s\n", rd.Freq)
-		// fmt.Printf("Display: %s\n", rd.Display)
-		// fmt.Printf("Len Display: %d\n", len(rd.Display))
-		// fmt.Printf("State: %s\n", rd.State)
-		// fmt.Printf("Mute: %s\n", rd.Mute)
-		// fmt.Printf("\n")
 	}
 }
 
@@ -277,6 +259,6 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 }
 
 func main() {
-	rotelDevice := NewRotelDevice()
+	rotelDevice := NewRotelDevice("/dev/ttyUSB0", "tcp://localhost:1883")
 	rotelDevice.SerialLoop()
 }
