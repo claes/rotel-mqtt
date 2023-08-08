@@ -1,4 +1,3 @@
-# Rotel-to-MQTT adapter
+# Rotel-to-MQTT bridge 
 
-This program communicates with a Rotel RA-12 amplifier using the serial port
-and publishes the information to MQTT.
+This program bridges the Rotel RA-12 amplifier serial protocol to MQTT.
