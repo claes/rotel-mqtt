@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
@@ -69,6 +70,7 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 		token := client.Subscribe(key, 0, function)
 		token.Wait()
 	}
+	time.Sleep(2 * time.Second)
 	bridge.initialize(true)
 	return bridge
 }
