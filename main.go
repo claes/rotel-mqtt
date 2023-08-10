@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
@@ -67,13 +68,18 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 		token := client.Subscribe(key, 0, function)
 		token.Wait()
 	}
-	bridge.initialize()
+	time.Sleep(2 * time.Second)
+	bridge.initialize(true)
 	return bridge
 }
 
-func (bridge *RotelMQTTBridge) initialize() {
+func (bridge *RotelMQTTBridge) initialize(askPower bool) {
+	if askPower {
+		// to avoid recursion when initializing after power on
+		bridge.SendSerialRequest("get_current_power!")
+	}
 	bridge.SendSerialRequest("display_update_auto!")
-	bridge.SendSerialRequest("get_current_power!")
+	bridge.SendSerialRequest("get_display!")
 	bridge.SendSerialRequest("get_volume!")
 	bridge.SendSerialRequest("get_current_source!")
 	bridge.SendSerialRequest("get_current_freq!")
@@ -166,6 +172,8 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 	bridge.RotelDataParser.HandleParsedData(data)
 	for cmd := bridge.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = bridge.RotelDataParser.GetNextRotelData() {
 
+		fmt.Printf("cmd: %v\n", cmd)
+
 		switch action := cmd[0]; action {
 		case "volume":
 			bridge.Volume = cmd[1]
@@ -190,11 +198,24 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 				bridge.Mute = cmd[1]
 			}
 		case "power":
-			if cmd[1] == "on/standby" {
-				bridge.SendSerialRequest("get_current_power!")
-			} else {
+			if cmd[1] == "on" {
+				bridge.State = cmd[1]
+				bridge.initialize(false)
+				//bridge.SendSerialRequest("get_current_power!")
+			} else if cmd[1] == "standby" {
 				bridge.State = cmd[1]
 			}
+		case "power_off":
+			bridge.State = "standby"
+			bridge.Volume = ""
+			bridge.Source = ""
+			bridge.Freq = ""
+			bridge.Display = ""
+			bridge.Treble = ""
+			bridge.Bass = ""
+			bridge.Tone = ""
+			bridge.Balance = ""
+
 		}
 	}
 }
