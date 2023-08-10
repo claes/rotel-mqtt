@@ -1,8 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,12 +39,16 @@ func NewRotelDevice(serialDevice string, mqttBroker string) *RotelDevice {
 	serialPort, err := serial.OpenPort(serialConfig)
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		fmt.Printf("Connected to serial device: %s\n", serialDevice)
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
+	} else {
+		fmt.Printf("Connected to MQTT broker: %s\n", mqttBroker)
 	}
 
 	rotelDevice := &RotelDevice{
@@ -258,7 +265,31 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 	}
 }
 
+func printHelp() {
+	fmt.Println("Usage: rotel-mqtt [OPTIONS]")
+	fmt.Println("Options:")
+	flag.PrintDefaults()
+}
+
 func main() {
-	rotelDevice := NewRotelDevice("/dev/ttyUSB0", "tcp://localhost:1883")
-	rotelDevice.SerialLoop()
+	serialDevice := flag.String("serial", "/dev/ttyUSB0", "Serial device path")
+	mqttBroker := flag.String("broker", "tcp://localhost:1883", "MQTT broker URL")
+	help := flag.Bool("help", false, "print help")
+	flag.Parse()
+
+	if *help {
+		printHelp()
+		os.Exit(0)
+	}
+
+	rotelDevice := NewRotelDevice(*serialDevice, *mqttBroker)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	fmt.Printf("Starting\n")
+	go rotelDevice.SerialLoop()
+	<-c
+	fmt.Printf("Shutting down\n")
+	os.Exit(0)
 }
