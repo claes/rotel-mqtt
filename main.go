@@ -1,8 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,9 +14,7 @@ import (
 	"github.com/tarm/serial"
 )
 
-// Rotel device
-
-type RotelDevice struct {
+type RotelMQTTBridge struct {
 	SerialPort      *serial.Port
 	MQTTClient      mqtt.Client
 	RotelDataParser RotelDataParser
@@ -30,165 +31,169 @@ type RotelDevice struct {
 	Volume  string
 }
 
-func NewRotelDevice(serialDevice string, mqttBroker string) *RotelDevice {
+func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge {
 
 	serialConfig := &serial.Config{Name: serialDevice, Baud: 115200}
 	serialPort, err := serial.OpenPort(serialConfig)
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		fmt.Printf("Connected to serial device: %s\n", serialDevice)
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
+	} else {
+		fmt.Printf("Connected to MQTT broker: %s\n", mqttBroker)
 	}
 
-	rotelDevice := &RotelDevice{
+	bridge := &RotelMQTTBridge{
 		SerialPort:      serialPort,
 		MQTTClient:      client,
 		RotelDataParser: *NewRotelDataParser(),
 	}
 
 	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
-		"rotel/volume/set": rotelDevice.onVolumeSet,
-		"rotel/power/set":  rotelDevice.onPowerSet,
-		"rotel/mute/set":   rotelDevice.onMuteSet,
-		"rotel/source/set": rotelDevice.onSourceSet,
-		"rotel/bass/set":   rotelDevice.onBassSet,
-		"rotel/treble/set": rotelDevice.onTrebleSet,
+		"rotel/volume/set": bridge.onVolumeSet,
+		"rotel/power/set":  bridge.onPowerSet,
+		"rotel/mute/set":   bridge.onMuteSet,
+		"rotel/source/set": bridge.onSourceSet,
+		"rotel/bass/set":   bridge.onBassSet,
+		"rotel/treble/set": bridge.onTrebleSet,
 	}
 	for key, function := range funcs {
 		token := client.Subscribe(key, 0, function)
 		token.Wait()
 	}
-	rotelDevice.initialize()
-	return rotelDevice
+	bridge.initialize()
+	return bridge
 }
 
-func (rd *RotelDevice) initialize() {
-	rd.SendRequest("display_update_auto!")
-	rd.SendRequest("get_current_power!")
-	rd.SendRequest("get_volume!")
-	rd.SendRequest("get_current_source!")
-	rd.SendRequest("get_current_freq!")
-	rd.SendRequest("get_tone!")
-	rd.SendRequest("get_bass!")
-	rd.SendRequest("get_treble!")
-	rd.SendRequest("get_balance!")
+func (bridge *RotelMQTTBridge) initialize() {
+	bridge.SendSerialRequest("display_update_auto!")
+	bridge.SendSerialRequest("get_current_power!")
+	bridge.SendSerialRequest("get_volume!")
+	bridge.SendSerialRequest("get_current_source!")
+	bridge.SendSerialRequest("get_current_freq!")
+	bridge.SendSerialRequest("get_tone!")
+	bridge.SendSerialRequest("get_bass!")
+	bridge.SendSerialRequest("get_treble!")
+	bridge.SendSerialRequest("get_balance!")
 }
 
-func (rd *RotelDevice) onVolumeSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onVolumeSet(client mqtt.Client, message mqtt.Message) {
 	// up / down / number 1-96 / max / min
-	rd.SendRequest(fmt.Sprintf("volume_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("volume_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onPowerSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onPowerSet(client mqtt.Client, message mqtt.Message) {
 	// on / off / toggle
-	rd.SendRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onMuteSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onMuteSet(client mqtt.Client, message mqtt.Message) {
 	// on / off / "" (=toggle)
-	rd.SendRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onSourceSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onSourceSet(client mqtt.Client, message mqtt.Message) {
 	// rcd / cd / coax1 / coax2 / opt1 / opt2 / aux1 / aux2 / tuner / phono / usb
-	rd.SendRequest(fmt.Sprintf("%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onBassSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onBassSet(client mqtt.Client, message mqtt.Message) {
 	// up / down / -10 -- 000 -- +10
-	rd.SendRequest(fmt.Sprintf("bass_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("bass_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onTrebleSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onTrebleSet(client mqtt.Client, message mqtt.Message) {
 	// up / down / -10 -- 000 -- +10
-	rd.SendRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) onBalanceSet(client mqtt.Client, message mqtt.Message) {
+func (bridge *RotelMQTTBridge) onBalanceSet(client mqtt.Client, message mqtt.Message) {
 	// right / left / L15 -- 000 -- R15
-	rd.SendRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
+	bridge.SendSerialRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
 }
 
-func (rd *RotelDevice) Publish(topic string, message string) {
-	token := rd.MQTTClient.Publish(topic, 0, false, message)
+func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string) {
+	token := bridge.MQTTClient.Publish(topic, 0, false, message)
 	token.Wait()
 }
 
-func (rd *RotelDevice) SerialLoop() {
+func (bridge *RotelMQTTBridge) SerialLoop() {
 	buf := make([]byte, 128)
 	for {
-		n, err := rd.SerialPort.Read(buf)
+		n, err := bridge.SerialPort.Read(buf)
 		if err != nil {
 			log.Fatal(err)
 		}
-		rd.ProcessData(string(buf[:n]))
+		bridge.ProcessRotelData(string(buf[:n]))
 
 		statemap := map[string]string{
-			"rotel/balance": rd.Balance,
-			"rotel/bass":    rd.Bass,
-			"rotel/display": rd.Display,
-			"rotel/freq":    rd.Freq,
-			"rotel/mute":    rd.Mute,
-			"rotel/source":  rd.Source,
-			"rotel/state":   rd.State,
-			"rotel/tone":    rd.Tone,
-			"rotel/treble":  rd.Treble,
-			"rotel/volume":  rd.Volume,
+			"rotel/balance": bridge.Balance,
+			"rotel/bass":    bridge.Bass,
+			"rotel/display": bridge.Display,
+			"rotel/freq":    bridge.Freq,
+			"rotel/mute":    bridge.Mute,
+			"rotel/source":  bridge.Source,
+			"rotel/state":   bridge.State,
+			"rotel/tone":    bridge.Tone,
+			"rotel/treble":  bridge.Treble,
+			"rotel/volume":  bridge.Volume,
 		}
 		for key, value := range statemap {
-			rd.Publish(key, value)
+			bridge.PublishMQTT(key, value)
 		}
 	}
 }
 
 var serialWriteMutex sync.Mutex
 
-func (rd *RotelDevice) SendRequest(message string) {
+func (bridge *RotelMQTTBridge) SendSerialRequest(message string) {
 	serialWriteMutex.Lock()
 	defer serialWriteMutex.Unlock()
 
-	_, err := rd.SerialPort.Write([]byte(message))
+	_, err := bridge.SerialPort.Write([]byte(message))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (rd *RotelDevice) ProcessData(data string) {
-	rd.RotelDataParser.HandleParsedData(data)
-	for cmd := rd.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = rd.RotelDataParser.GetNextRotelData() {
+func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
+	bridge.RotelDataParser.HandleParsedData(data)
+	for cmd := bridge.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = bridge.RotelDataParser.GetNextRotelData() {
 
 		switch action := cmd[0]; action {
 		case "volume":
-			rd.Volume = cmd[1]
+			bridge.Volume = cmd[1]
 		case "source":
-			rd.Source = cmd[1]
+			bridge.Source = cmd[1]
 		case "freq":
-			rd.Freq = cmd[1]
+			bridge.Freq = cmd[1]
 		case "display":
-			rd.Display = cmd[1]
+			bridge.Display = cmd[1]
 		case "treble":
-			rd.Treble = cmd[1]
+			bridge.Treble = cmd[1]
 		case "bass":
-			rd.Bass = cmd[1]
+			bridge.Bass = cmd[1]
 		case "tone":
-			rd.Tone = cmd[1]
+			bridge.Tone = cmd[1]
 		case "balance":
-			rd.Balance = cmd[1]
+			bridge.Balance = cmd[1]
 		case "mute":
 			if cmd[1] == "on/off" {
-				rd.SendRequest("get_volume!")
+				bridge.SendSerialRequest("get_volume!")
 			} else {
-				rd.Mute = cmd[1]
+				bridge.Mute = cmd[1]
 			}
 		case "power":
 			if cmd[1] == "on/standby" {
-				rd.SendRequest("get_current_power!")
+				bridge.SendSerialRequest("get_current_power!")
 			} else {
-				rd.State = cmd[1]
+				bridge.State = cmd[1]
 			}
 		}
 	}
@@ -258,7 +263,31 @@ func (rdp *RotelDataParser) HandleParsedData(data string) {
 	}
 }
 
+func printHelp() {
+	fmt.Println("Usage: rotel-mqtt [OPTIONS]")
+	fmt.Println("Options:")
+	flag.PrintDefaults()
+}
+
 func main() {
-	rotelDevice := NewRotelDevice("/dev/ttyUSB0", "tcp://localhost:1883")
-	rotelDevice.SerialLoop()
+	serialDevice := flag.String("serial", "/dev/ttyUSB0", "Serial device path")
+	mqttBroker := flag.String("broker", "tcp://localhost:1883", "MQTT broker URL")
+	help := flag.Bool("help", false, "print help")
+	flag.Parse()
+
+	if *help {
+		printHelp()
+		os.Exit(0)
+	}
+
+	bridge := NewRotelMQTTBridge(*serialDevice, *mqttBroker)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	fmt.Printf("Starting\n")
+	go bridge.SerialLoop()
+	<-c
+	fmt.Printf("Shutting down\n")
+	os.Exit(0)
 }
