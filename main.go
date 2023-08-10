@@ -15,6 +15,8 @@ import (
 	"github.com/tarm/serial"
 )
 
+var debug *bool
+
 type RotelMQTTBridge struct {
 	SerialPort      *serial.Port
 	MQTTClient      mqtt.Client
@@ -38,7 +40,7 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 	serialPort, err := serial.OpenPort(serialConfig)
 	if err != nil {
 		log.Fatal(err)
-	} else {
+	} else if *debug {
 		fmt.Printf("Connected to serial device: %s\n", serialDevice)
 	}
 
@@ -46,7 +48,7 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
-	} else {
+	} else if *debug {
 		fmt.Printf("Connected to MQTT broker: %s\n", mqttBroker)
 	}
 
@@ -125,7 +127,7 @@ func (bridge *RotelMQTTBridge) onBalanceSet(client mqtt.Client, message mqtt.Mes
 }
 
 func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string) {
-	token := bridge.MQTTClient.Publish(topic, 0, false, message)
+	token := bridge.MQTTClient.Publish(topic, 0, true, message)
 	token.Wait()
 }
 
@@ -172,7 +174,9 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 	bridge.RotelDataParser.HandleParsedData(data)
 	for cmd := bridge.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = bridge.RotelDataParser.GetNextRotelData() {
 
-		fmt.Printf("cmd: %v\n", cmd)
+		if *debug {
+			fmt.Printf("cmd: %v\n", cmd)
+		}
 
 		switch action := cmd[0]; action {
 		case "volume":
@@ -201,7 +205,6 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 			if cmd[1] == "on" {
 				bridge.State = cmd[1]
 				bridge.initialize(false)
-				//bridge.SendSerialRequest("get_current_power!")
 			} else if cmd[1] == "standby" {
 				bridge.State = cmd[1]
 			}
@@ -215,7 +218,6 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 			bridge.Bass = ""
 			bridge.Tone = ""
 			bridge.Balance = ""
-
 		}
 	}
 }
@@ -255,7 +257,6 @@ func (rdp *RotelDataParser) PushRotelData(rotelData []string) {
 
 func (rdp *RotelDataParser) ComputeFixedLengthDataToRead(data string) int {
 	if strings.HasPrefix(data, "display=") && len(data) >= len("display=XXX") {
-		// nextReadCount := int(data[len("display="):len("display=XXX")][0])
 		nextReadCount, _ := strconv.Atoi(data[len("display="):len("display=XXX")])
 		return nextReadCount
 	}
@@ -293,7 +294,8 @@ func printHelp() {
 func main() {
 	serialDevice := flag.String("serial", "/dev/ttyUSB0", "Serial device path")
 	mqttBroker := flag.String("broker", "tcp://localhost:1883", "MQTT broker URL")
-	help := flag.Bool("help", false, "print help")
+	help := flag.Bool("help", false, "Print help")
+	debug = flag.Bool("debug", false, "Debug logging")
 	flag.Parse()
 
 	if *help {
@@ -306,9 +308,9 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	fmt.Printf("Starting\n")
+	fmt.Printf("Started\n")
 	go bridge.SerialLoop()
 	<-c
-	fmt.Printf("Shutting down\n")
+	fmt.Printf("Shut down\n")
 	os.Exit(0)
 }
