@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,27 +12,32 @@ import (
 	"sync"
 	"time"
 
+	// "encoding/json"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
 )
 
 var debug *bool
 
+type RotelState struct {
+	Balance string `json:"balance"`
+	Bass    string `json:"bass"`
+	Display string `json:"display"`
+	Freq    string `json:"freq"`
+	Mute    string `json:"mute"`
+	Source  string `json:"source"`
+	State   string `json:"state"`
+	Tone    string `json:"tone"`
+	Treble  string `json:"treble"`
+	Volume  string `json:"volume"`
+}
+
 type RotelMQTTBridge struct {
 	SerialPort      *serial.Port
 	MQTTClient      mqtt.Client
 	RotelDataParser RotelDataParser
-
-	Balance string
-	Bass    string
-	Display string
-	Freq    string
-	Mute    string
-	Source  string
-	State   string
-	Tone    string
-	Treble  string
-	Volume  string
+	State           *RotelState
 }
 
 func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge {
@@ -56,6 +62,7 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 		SerialPort:      serialPort,
 		MQTTClient:      client,
 		RotelDataParser: *NewRotelDataParser(),
+		State:           &RotelState{},
 	}
 
 	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
@@ -93,22 +100,41 @@ func (bridge *RotelMQTTBridge) initialize(askPower bool) {
 
 func (bridge *RotelMQTTBridge) onVolumeSet(client mqtt.Client, message mqtt.Message) {
 	// up / down / number 1-96 / max / min
-	bridge.SendSerialRequest(fmt.Sprintf("volume_%s!", string(message.Payload())))
+	p := string(message.Payload())
+	//TODO handle number
+	if p == "up" || p == "down" || p == "max" || p == "min" {
+		bridge.PublishMQTT("rotel/volume/set", "", false)
+		bridge.SendSerialRequest(fmt.Sprintf("volume_%s!", p))
+	}
 }
 
 func (bridge *RotelMQTTBridge) onPowerSet(client mqtt.Client, message mqtt.Message) {
 	// on / off / toggle
-	bridge.SendSerialRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
+	p := string(message.Payload())
+	if p == "on" || p == "off" {
+		bridge.PublishMQTT("rotel/power/set", "", false)
+		bridge.SendSerialRequest(fmt.Sprintf("power_%s!", p))
+	}
 }
 
 func (bridge *RotelMQTTBridge) onMuteSet(client mqtt.Client, message mqtt.Message) {
 	// on / off / "" (=toggle)
-	bridge.SendSerialRequest(fmt.Sprintf("power_%s!", string(message.Payload())))
+	p := string(message.Payload())
+	if p == "on" || p == "off" {
+		bridge.PublishMQTT("rotel/mute/set", "", false)
+		bridge.SendSerialRequest(fmt.Sprintf("mute_%s!", p))
+	}
 }
 
 func (bridge *RotelMQTTBridge) onSourceSet(client mqtt.Client, message mqtt.Message) {
 	// rcd / cd / coax1 / coax2 / opt1 / opt2 / aux1 / aux2 / tuner / phono / usb
-	bridge.SendSerialRequest(fmt.Sprintf("%s!", string(message.Payload())))
+	p := string(message.Payload())
+	if p == "rcd" || p == "cd" || p == "coax1" || p == "coax2" ||
+		p == "opt1" || p == "opt2" || p == "aux1" || p == "aux2" ||
+		p == "tuner" || p == "phono" || p == "usb" {
+		bridge.PublishMQTT("rotel/source/set", "", false)
+		bridge.SendSerialRequest(fmt.Sprintf("%s!", string(message.Payload())))
+	}
 }
 
 func (bridge *RotelMQTTBridge) onBassSet(client mqtt.Client, message mqtt.Message) {
@@ -126,8 +152,8 @@ func (bridge *RotelMQTTBridge) onBalanceSet(client mqtt.Client, message mqtt.Mes
 	bridge.SendSerialRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
 }
 
-func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string) {
-	token := bridge.MQTTClient.Publish(topic, 0, true, message)
+func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string, retained bool) {
+	token := bridge.MQTTClient.Publish(topic, 0, retained, message)
 	token.Wait()
 }
 
@@ -140,21 +166,11 @@ func (bridge *RotelMQTTBridge) SerialLoop() {
 		}
 		bridge.ProcessRotelData(string(buf[:n]))
 
-		statemap := map[string]string{
-			"rotel/balance": bridge.Balance,
-			"rotel/bass":    bridge.Bass,
-			"rotel/display": bridge.Display,
-			"rotel/freq":    bridge.Freq,
-			"rotel/mute":    bridge.Mute,
-			"rotel/source":  bridge.Source,
-			"rotel/state":   bridge.State,
-			"rotel/tone":    bridge.Tone,
-			"rotel/treble":  bridge.Treble,
-			"rotel/volume":  bridge.Volume,
+		jsonState, err := json.Marshal(bridge.State)
+		if err != nil {
+			continue
 		}
-		for key, value := range statemap {
-			bridge.PublishMQTT(key, value)
-		}
+		bridge.PublishMQTT("rotel/state", string(jsonState), true)
 	}
 }
 
@@ -180,44 +196,44 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 
 		switch action := cmd[0]; action {
 		case "volume":
-			bridge.Volume = cmd[1]
+			bridge.State.Volume = cmd[1]
 		case "source":
-			bridge.Source = cmd[1]
+			bridge.State.Source = cmd[1]
 		case "freq":
-			bridge.Freq = cmd[1]
+			bridge.State.Freq = cmd[1]
 		case "display":
-			bridge.Display = cmd[1]
+			bridge.State.Display = cmd[1]
 		case "treble":
-			bridge.Treble = cmd[1]
+			bridge.State.Treble = cmd[1]
 		case "bass":
-			bridge.Bass = cmd[1]
+			bridge.State.Bass = cmd[1]
 		case "tone":
-			bridge.Tone = cmd[1]
+			bridge.State.Tone = cmd[1]
 		case "balance":
-			bridge.Balance = cmd[1]
+			bridge.State.Balance = cmd[1]
 		case "mute":
 			if cmd[1] == "on/off" {
 				bridge.SendSerialRequest("get_volume!")
 			} else {
-				bridge.Mute = cmd[1]
+				bridge.State.Mute = cmd[1]
 			}
 		case "power":
 			if cmd[1] == "on" {
-				bridge.State = cmd[1]
+				bridge.State.State = cmd[1]
 				bridge.initialize(false)
 			} else if cmd[1] == "standby" {
-				bridge.State = cmd[1]
+				bridge.State.State = cmd[1]
 			}
 		case "power_off":
-			bridge.State = "standby"
-			bridge.Volume = ""
-			bridge.Source = ""
-			bridge.Freq = ""
-			bridge.Display = ""
-			bridge.Treble = ""
-			bridge.Bass = ""
-			bridge.Tone = ""
-			bridge.Balance = ""
+			bridge.State.State = "standby"
+			bridge.State.Volume = ""
+			bridge.State.Source = ""
+			bridge.State.Freq = ""
+			bridge.State.Display = ""
+			bridge.State.Treble = ""
+			bridge.State.Bass = ""
+			bridge.State.Tone = ""
+			bridge.State.Balance = ""
 		}
 	}
 }
