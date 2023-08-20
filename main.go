@@ -182,6 +182,7 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 				bridge.initialize(false)
 			} else if cmd[1] == "standby" {
 				bridge.State.State = cmd[1]
+				bridge.initialize(false)
 			}
 		case "power_off":
 			bridge.State.State = "standby"
