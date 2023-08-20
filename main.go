@@ -95,7 +95,12 @@ func (bridge *RotelMQTTBridge) initialize(askPower bool) {
 	bridge.SendSerialRequest("get_balance!")
 }
 
+var sendMutex sync.Mutex
+
 func (bridge *RotelMQTTBridge) onCommandSend(client mqtt.Client, message mqtt.Message) {
+	sendMutex.Lock()
+	defer sendMutex.Unlock()
+
 	// Sends command to the Rotel without intermediate parsing
 	// Rotel commands are documented here:
 	// https://www.rotel.com/sites/default/files/product/rs232/RA12%20Protocol.pdf
