@@ -100,8 +100,10 @@ func (bridge *RotelMQTTBridge) onCommandSend(client mqtt.Client, message mqtt.Me
 	// Rotel commands are documented here:
 	// https://www.rotel.com/sites/default/files/product/rs232/RA12%20Protocol.pdf
 	command := string(message.Payload())
-	bridge.PublishMQTT("rotel/command/send", "", false)
-	bridge.SendSerialRequest(command)
+	if command != "" {
+		bridge.PublishMQTT("rotel/command/send", "", false)
+		bridge.SendSerialRequest(command)
+	}
 }
 
 func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string, retained bool) {
