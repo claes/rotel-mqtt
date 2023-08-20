@@ -52,6 +52,17 @@
           };
         });
 
+        # Add dependencies that are only needed for development
+        devShells = forAllSystems (system:
+        let 
+          pkgs = nixpkgsFor.${system};
+        in
+        {
+          default = pkgs.mkShell {
+            buildInputs = with pkgs; [ go gopls gotools go-tools go-outline godef delve mqttui ];
+          };
+        });
+
       # The default package for 'nix build'. This makes sense if the
       # flake provides only one package or there is a clear "main"
       # package.

@@ -51,6 +51,8 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
+	// See https://github.com/eclipse/paho.mqtt.golang/blob/master/cmd/ssl/main.go#L88
+	//opts.SetTLSConfig()
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
@@ -66,12 +68,7 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 	}
 
 	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
-		"rotel/volume/set": bridge.onVolumeSet,
-		"rotel/power/set":  bridge.onPowerSet,
-		"rotel/mute/set":   bridge.onMuteSet,
-		"rotel/source/set": bridge.onSourceSet,
-		"rotel/bass/set":   bridge.onBassSet,
-		"rotel/treble/set": bridge.onTrebleSet,
+		"rotel/command/send": bridge.onCommandSend,
 	}
 	for key, function := range funcs {
 		token := client.Subscribe(key, 0, function)
@@ -98,58 +95,13 @@ func (bridge *RotelMQTTBridge) initialize(askPower bool) {
 	bridge.SendSerialRequest("get_balance!")
 }
 
-func (bridge *RotelMQTTBridge) onVolumeSet(client mqtt.Client, message mqtt.Message) {
-	// up / down / number 1-96 / max / min
-	p := string(message.Payload())
-	//TODO handle number
-	if p == "up" || p == "down" || p == "max" || p == "min" {
-		bridge.PublishMQTT("rotel/volume/set", "", false)
-		bridge.SendSerialRequest(fmt.Sprintf("volume_%s!", p))
-	}
-}
-
-func (bridge *RotelMQTTBridge) onPowerSet(client mqtt.Client, message mqtt.Message) {
-	// on / off / toggle
-	p := string(message.Payload())
-	if p == "on" || p == "off" {
-		bridge.PublishMQTT("rotel/power/set", "", false)
-		bridge.SendSerialRequest(fmt.Sprintf("power_%s!", p))
-	}
-}
-
-func (bridge *RotelMQTTBridge) onMuteSet(client mqtt.Client, message mqtt.Message) {
-	// on / off / "" (=toggle)
-	p := string(message.Payload())
-	if p == "on" || p == "off" {
-		bridge.PublishMQTT("rotel/mute/set", "", false)
-		bridge.SendSerialRequest(fmt.Sprintf("mute_%s!", p))
-	}
-}
-
-func (bridge *RotelMQTTBridge) onSourceSet(client mqtt.Client, message mqtt.Message) {
-	// rcd / cd / coax1 / coax2 / opt1 / opt2 / aux1 / aux2 / tuner / phono / usb
-	p := string(message.Payload())
-	if p == "rcd" || p == "cd" || p == "coax1" || p == "coax2" ||
-		p == "opt1" || p == "opt2" || p == "aux1" || p == "aux2" ||
-		p == "tuner" || p == "phono" || p == "usb" {
-		bridge.PublishMQTT("rotel/source/set", "", false)
-		bridge.SendSerialRequest(fmt.Sprintf("%s!", string(message.Payload())))
-	}
-}
-
-func (bridge *RotelMQTTBridge) onBassSet(client mqtt.Client, message mqtt.Message) {
-	// up / down / -10 -- 000 -- +10
-	bridge.SendSerialRequest(fmt.Sprintf("bass_%s!", string(message.Payload())))
-}
-
-func (bridge *RotelMQTTBridge) onTrebleSet(client mqtt.Client, message mqtt.Message) {
-	// up / down / -10 -- 000 -- +10
-	bridge.SendSerialRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
-}
-
-func (bridge *RotelMQTTBridge) onBalanceSet(client mqtt.Client, message mqtt.Message) {
-	// right / left / L15 -- 000 -- R15
-	bridge.SendSerialRequest(fmt.Sprintf("treble_%s!", string(message.Payload())))
+func (bridge *RotelMQTTBridge) onCommandSend(client mqtt.Client, message mqtt.Message) {
+	// Sends command to the Rotel without intermediate parsing
+	// Rotel commands are documented here:
+	// https://www.rotel.com/sites/default/files/product/rs232/RA12%20Protocol.pdf
+	command := string(message.Payload())
+	bridge.PublishMQTT("rotel/command/send", "", false)
+	bridge.SendSerialRequest(command)
 }
 
 func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string, retained bool) {
