@@ -68,7 +68,8 @@ func NewRotelMQTTBridge(serialDevice string, mqttBroker string) *RotelMQTTBridge
 	}
 
 	funcs := map[string]func(client mqtt.Client, message mqtt.Message){
-		"rotel/command/send": bridge.onCommandSend,
+		"rotel/command/send":       bridge.onCommandSend,
+		"rotel/command/initialize": bridge.onInitialize,
 	}
 	for key, function := range funcs {
 		token := client.Subscribe(key, 0, function)
@@ -108,6 +109,14 @@ func (bridge *RotelMQTTBridge) onCommandSend(client mqtt.Client, message mqtt.Me
 	if command != "" {
 		bridge.PublishMQTT("rotel/command/send", "", false)
 		bridge.SendSerialRequest(command)
+	}
+}
+
+func (bridge *RotelMQTTBridge) onInitialize(client mqtt.Client, message mqtt.Message) {
+	command := string(message.Payload())
+	if command != "" {
+		bridge.PublishMQTT("rotel/command/initialize", "", false)
+		bridge.initialize(true)
 	}
 }
 
