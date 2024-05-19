@@ -21,16 +21,18 @@ import (
 var debug *bool
 
 type RotelState struct {
-	Balance string `json:"balance"`
-	Bass    string `json:"bass"`
-	Display string `json:"display"`
-	Freq    string `json:"freq"`
-	Mute    string `json:"mute"`
-	Source  string `json:"source"`
-	State   string `json:"state"`
-	Tone    string `json:"tone"`
-	Treble  string `json:"treble"`
-	Volume  string `json:"volume"`
+	Balance  string `json:"balance"`
+	Bass     string `json:"bass"`
+	Display  string `json:"display"`
+	Display1 string `json:"display1"`
+	Display2 string `json:"display2"`
+	Freq     string `json:"freq"`
+	Mute     string `json:"mute"`
+	Source   string `json:"source"`
+	State    string `json:"state"`
+	Tone     string `json:"tone"`
+	Treble   string `json:"treble"`
+	Volume   string `json:"volume"`
 }
 
 type RotelMQTTBridge struct {
@@ -87,6 +89,8 @@ func (bridge *RotelMQTTBridge) initialize(askPower bool) {
 	}
 	bridge.SendSerialRequest("display_update_auto!")
 	bridge.SendSerialRequest("get_display!")
+	bridge.SendSerialRequest("get_display1!")
+	bridge.SendSerialRequest("get_display2!")
 	bridge.SendSerialRequest("get_volume!")
 	bridge.SendSerialRequest("get_current_source!")
 	bridge.SendSerialRequest("get_current_freq!")
@@ -171,6 +175,10 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 			bridge.State.Freq = cmd[1]
 		case "display":
 			bridge.State.Display = cmd[1]
+		case "display1":
+			bridge.State.Display1 = cmd[1]
+		case "display2":
+			bridge.State.Display2 = cmd[1]
 		case "treble":
 			bridge.State.Treble = cmd[1]
 		case "bass":
@@ -199,6 +207,8 @@ func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
 			bridge.State.Source = ""
 			bridge.State.Freq = ""
 			bridge.State.Display = ""
+			bridge.State.Display1 = ""
+			bridge.State.Display2 = ""
 			bridge.State.Treble = ""
 			bridge.State.Bass = ""
 			bridge.State.Tone = ""
@@ -243,6 +253,14 @@ func (rdp *RotelDataParser) PushRotelData(rotelData []string) {
 func (rdp *RotelDataParser) ComputeFixedLengthDataToRead(data string) int {
 	if strings.HasPrefix(data, "display=") && len(data) >= len("display=XXX") {
 		nextReadCount, _ := strconv.Atoi(data[len("display="):len("display=XXX")])
+		return nextReadCount
+	}
+	if strings.HasPrefix(data, "display1=") && len(data) >= len("display1=XX") {
+		nextReadCount, _ := strconv.Atoi(data[len("display1="):len("display1=XX")])
+		return nextReadCount
+	}
+	if strings.HasPrefix(data, "display2=") && len(data) >= len("display2=XX") {
+		nextReadCount, _ := strconv.Atoi(data[len("display2="):len("display2=XX")])
 		return nextReadCount
 	}
 	return 0
