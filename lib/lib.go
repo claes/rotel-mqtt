@@ -2,7 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"log"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -44,7 +43,7 @@ func CreateSerialPort(serialDevice string) (*serial.Port, error) {
 		slog.Error("Could not open port", "serialDevice", serialDevice, "error", err)
 		return nil, err
 	} else {
-		slog.Info("Connected to serial devicen", "serialDevice", serialDevice)
+		slog.Info("Connected to serial device", "serialDevice", serialDevice)
 	}
 	return serialPort, nil
 }
@@ -135,12 +134,14 @@ func (bridge *RotelMQTTBridge) SerialLoop() {
 	for {
 		n, err := bridge.SerialPort.Read(buf)
 		if err != nil {
-			log.Fatal(err)
+			slog.Error("Error reading bytes from serial port", "buf", buf)
+			continue
 		}
 		bridge.ProcessRotelData(string(buf[:n]))
 
 		jsonState, err := json.Marshal(bridge.State)
 		if err != nil {
+			slog.Error("Error marshalling state", "state", bridge.State)
 			continue
 		}
 		bridge.PublishMQTT("rotel/state", string(jsonState), true)
@@ -155,7 +156,7 @@ func (bridge *RotelMQTTBridge) SendSerialRequest(message string) {
 
 	_, err := bridge.SerialPort.Write([]byte(message))
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Error writing message", "message", message)
 	}
 }
 
