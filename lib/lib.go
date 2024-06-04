@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"log/slog"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,28 +37,28 @@ type RotelMQTTBridge struct {
 	State           *RotelState
 }
 
-func CreateSerialPort(serialDevice string) *serial.Port {
+func CreateSerialPort(serialDevice string) (*serial.Port, error) {
 	serialConfig := &serial.Config{Name: serialDevice, Baud: 115200}
 	serialPort, err := serial.OpenPort(serialConfig)
 	if err != nil {
 		slog.Error("Could not open port", "serialDevice", serialDevice, "error", err)
-		os.Exit(1)
+		return nil, err
 	} else {
 		slog.Info("Connected to serial devicen", "serialDevice", serialDevice)
 	}
-	return serialPort
+	return serialPort, nil
 }
 
-func CreateMQTTClient(mqttBroker string) mqtt.Client {
+func CreateMQTTClient(mqttBroker string) (mqtt.Client, error) {
 	slog.Info("Creating MQTT client", "broker", mqttBroker)
 	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		slog.Error("Could not connect to broker", "mqttBroker", mqttBroker, "error", token.Error())
-		panic(token.Error())
+		return nil, token.Error()
 	}
 	slog.Info("Connected to MQTT broker", "mqttBroker", mqttBroker)
-	return client
+	return client, nil
 }
 
 func NewRotelMQTTBridge(serialPort *serial.Port, mqttClient mqtt.Client) *RotelMQTTBridge {

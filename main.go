@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 
@@ -31,8 +32,15 @@ func main() {
 		os.Exit(0)
 	}
 
-	bridge := lib.NewRotelMQTTBridge(lib.CreateSerialPort(*serialDevice),
-		lib.CreateMQTTClient(*mqttBroker))
+	serialPort, err := lib.CreateSerialPort(*serialDevice)
+	if err != nil {
+		slog.Error("Error creating serial device", "error", err, "serialDevice", *serialDevice)
+	}
+	mqttClient, err := lib.CreateMQTTClient(*mqttBroker)
+	if err != nil {
+		slog.Error("Error creating mqtt client", "error", err, "broker", *mqttBroker)
+	}
+	bridge := lib.NewRotelMQTTBridge(serialPort, mqttClient)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
