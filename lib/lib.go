@@ -161,10 +161,18 @@ func (bridge *RotelMQTTBridge) SendSerialRequest(message string) {
 }
 
 func (bridge *RotelMQTTBridge) ProcessRotelData(data string) {
-	slog.Debug("Process Rotel data", "data", data)
-	bridge.RotelDataParser.HandleParsedData(data)
-	for cmd := bridge.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = bridge.RotelDataParser.GetNextRotelData() {
 
+	slog.Debug("Process Rotel data", "data", data,
+		"nextKeyValuePair", bridge.RotelDataParser.NextKeyValuePair,
+		"lenQueue", len(bridge.RotelDataParser.RotelDataQueue))
+
+	bridge.RotelDataParser.HandleParsedData(data)
+
+	slog.Debug("Get next Rotel data", "data", data,
+		"nextKeyValuePair", bridge.RotelDataParser.NextKeyValuePair,
+		"lenQueue", len(bridge.RotelDataParser.RotelDataQueue))
+
+	for cmd := bridge.RotelDataParser.GetNextRotelData(); cmd != nil; cmd = bridge.RotelDataParser.GetNextRotelData() {
 		slog.Debug("Processed Rotel data", "data", data, "command", cmd)
 
 		switch action := cmd[0]; action {
