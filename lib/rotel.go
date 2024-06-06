@@ -121,7 +121,7 @@ func (rdp *RotelDataParser) match(s string) (bool, string) {
 	return false, s
 }
 
-func (rdp *RotelDataParser) HandleParsedDataNew(data string) {
+func (rdp *RotelDataParser) HandleParsedData(data string) {
 	rdp.buffer += string(data)
 	next := ""
 outer:
@@ -140,7 +140,7 @@ outer:
 	}
 }
 
-func (rdp *RotelDataParser) HandleParsedData(data string) {
+func (rdp *RotelDataParser) HandleParsedDataOld(data string) {
 	for _, c := range data {
 		fixedLengthDataToRead := rdp.ComputeFixedLengthDataToRead(rdp.NextKeyValuePair)
 		if fixedLengthDataToRead > 0 {

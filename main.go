@@ -20,25 +20,6 @@ func printHelp() {
 	flag.PrintDefaults()
 }
 
-func maintest() {
-
-	r := lib.NewRotelDataParser()
-
-	//r.NextKeyValuePair = "balance=000!"
-	r.NextKeyValuePair = "display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!"
-	//                                12345678901234567890
-	//r.NextKeyValuePair = "display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!"
-	//r.NextKeyValuePair = "display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax"
-
-	//	fmt.Printf("Next rotel data %d\n", len(r.GetNextRotelData()))
-
-	fmt.Printf("nkv %d %s\n", len(r.RotelDataQueue), r.NextKeyValuePair)
-	r.HandleParsedData("balance=000!")
-	fmt.Printf("nkv %d %s\n", len(r.RotelDataQueue), r.NextKeyValuePair)
-	fmt.Printf("Next rotel data %d\n", len(r.GetNextRotelData()))
-	fmt.Printf("Next rotel data %d\n", len(r.GetNextRotelData()))
-}
-
 func main() {
 	serialDevice := flag.String("serial", "/dev/ttyUSB0", "Serial device path")
 	mqttBroker := flag.String("broker", "tcp://localhost:1883", "MQTT broker URL")

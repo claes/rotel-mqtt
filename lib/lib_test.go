@@ -121,10 +121,10 @@ func TestDisplay(t *testing.T) {
 
 func TestTerminatedNew(t *testing.T) {
 	r := NewRotelDataParser()
-	r.HandleParsedDataNew("source=coax2!freq=44.1!")
-	r.HandleParsedDataNew("display=010,01234")
-	r.HandleParsedDataNew("56789A")
-	r.HandleParsedDataNew("display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!")
+	r.HandleParsedData("source=coax2!freq=44.1!")
+	r.HandleParsedData("display=010,01234")
+	r.HandleParsedData("56789A")
+	r.HandleParsedData("display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!power=on!display_update=auto!display=040,  COAX1      VOL 39  BASS 0     TREB 0  display1=20,  COAX1      VOL 39 display2=20, BASS 0     TREB 0  volume=39!source=coax1!freq=off!tone=on!bass=000!treble=000!balance=000!")
 
 	rotelData := r.GetNextRotelData()
 	if rotelData[0] != "source" || rotelData[1] != "coax2" {
