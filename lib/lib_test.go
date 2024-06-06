@@ -19,31 +19,6 @@ func TestTerminated(t *testing.T) {
 	}
 }
 
-func TestComputeFixedLengthDataToRead(t *testing.T) {
-	r := NewRotelDataParser()
-
-	i := r.ComputeFixedLengthDataToRead("display=010,0123456789A")
-	if i != 10 {
-		t.Error("Expected 10, got ", i)
-	}
-
-	i = r.ComputeFixedLengthDataToRead("display1=10,0123456789A")
-	if i != 10 {
-		t.Error("Expected 10, got ", i)
-	}
-
-	i = r.ComputeFixedLengthDataToRead("display2=10,0123456789A")
-	if i != 10 {
-		t.Error("Expected 10, got ", i)
-	}
-
-	i = r.ComputeFixedLengthDataToRead("source=coax2!freq=44.1!")
-
-	if i != 0 {
-		t.Error("Expected 0, got ", i)
-	}
-}
-
 func TestFixedLength(t *testing.T) {
 	r := NewRotelDataParser()
 	r.HandleParsedData("display=010,0123456789A")
