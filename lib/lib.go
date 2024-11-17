@@ -3,10 +3,9 @@ package lib
 import (
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
-
-	// "encoding/json"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
@@ -30,6 +29,7 @@ type RotelState struct {
 type RotelMQTTBridge struct {
 	SerialPort      *serial.Port
 	MQTTClient      mqtt.Client
+	TopicPrefix     string
 	RotelDataParser RotelDataParser
 	State           *RotelState
 }
@@ -58,11 +58,13 @@ func CreateMQTTClient(mqttBroker string) (mqtt.Client, error) {
 	return client, nil
 }
 
-func NewRotelMQTTBridge(serialPort *serial.Port, mqttClient mqtt.Client) *RotelMQTTBridge {
+func NewRotelMQTTBridge(serialPort *serial.Port, mqttClient mqtt.Client, topicPrefix string) *RotelMQTTBridge {
 
 	bridge := &RotelMQTTBridge{
-		SerialPort:      serialPort,
-		MQTTClient:      mqttClient,
+		SerialPort:  serialPort,
+		MQTTClient:  mqttClient,
+		TopicPrefix: topicPrefix,
+
 		RotelDataParser: *NewRotelDataParser(),
 		State:           &RotelState{},
 	}
@@ -72,12 +74,20 @@ func NewRotelMQTTBridge(serialPort *serial.Port, mqttClient mqtt.Client) *RotelM
 		"rotel/command/initialize": bridge.onInitialize,
 	}
 	for key, function := range funcs {
-		token := mqttClient.Subscribe(key, 0, function)
+		token := mqttClient.Subscribe(prefixify(topicPrefix, key), 0, function)
 		token.Wait()
 	}
 	time.Sleep(2 * time.Second)
 	bridge.initialize(true)
 	return bridge
+}
+
+func prefixify(topicPrefix, subtopic string) string {
+	if len(strings.TrimSpace(topicPrefix)) > 0 {
+		return topicPrefix + "/" + subtopic
+	} else {
+		return subtopic
+	}
 }
 
 func (bridge *RotelMQTTBridge) initialize(askPower bool) {
@@ -122,8 +132,8 @@ func (bridge *RotelMQTTBridge) onInitialize(client mqtt.Client, message mqtt.Mes
 	}
 }
 
-func (bridge *RotelMQTTBridge) PublishMQTT(topic string, message string, retained bool) {
-	token := bridge.MQTTClient.Publish(topic, 0, retained, message)
+func (bridge *RotelMQTTBridge) PublishMQTT(subtopic string, message string, retained bool) {
+	token := bridge.MQTTClient.Publish(prefixify(bridge.TopicPrefix, subtopic), 0, retained, message)
 	token.Wait()
 }
 

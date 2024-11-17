@@ -23,6 +23,7 @@ func printHelp() {
 func main() {
 	serialDevice := flag.String("serial", "/dev/ttyUSB0", "Serial device path")
 	mqttBroker := flag.String("broker", "tcp://localhost:1883", "MQTT broker URL")
+	topicPrefix := flag.String("topicPrefix", "", "MQTT topic prefix to use")
 	help := flag.Bool("help", false, "Print help")
 	debug = flag.Bool("debug", false, "Debug logging")
 	flag.Parse()
@@ -40,7 +41,7 @@ func main() {
 	if err != nil {
 		slog.Error("Error creating mqtt client", "error", err, "broker", *mqttBroker)
 	}
-	bridge := lib.NewRotelMQTTBridge(serialPort, mqttClient)
+	bridge := lib.NewRotelMQTTBridge(serialPort, mqttClient, *topicPrefix)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
